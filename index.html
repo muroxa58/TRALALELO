@@ -4,400 +4,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Platform Game - First Person</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #000;
-        }
-        canvas {
-            display: block;
-        }
-        #gameContainer {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        #controls {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            color: white;
-            font-family: Arial, sans-serif;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 10px;
-            border-radius: 5px;
-        }
-        #crosshair {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 24px;
-            pointer-events: none;
-        }
-        #score {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            color: white;
-            font-family: Arial, sans-serif;
-            font-size: 24px;
-        }
-        #loading {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-family: Arial, sans-serif;
-            font-size: 24px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
 </head>
 <body>
-    <div id="gameContainer"></div>
-    <div id="controls">
+    <div id="menu">
+        <div class="menu-container">
+            <h1>3D Platform Game</h1>
+            <button id="playButton">Play</button>
+            <button id="weaponsButton">Weapons</button>
+            <button id="settingsButton">Settings</button>
+        </div>
+    </div>
+
+    <div id="weapons" class="hidden">
+        <div class="weapons-container">
+            <h2>Weapons</h2>
+            <button id="glockButton" class="weapon-button">Glock 18</button>
+            <button id="ak47Button" class="weapon-button">AK-47</button>
+            <button id="backToMenuButton">Back</button>
+        </div>
+    </div>
+
+    <div id="settings" class="hidden">
+        <div class="settings-container">
+            <h2>Settings</h2>
+            <div class="volume-control">
+                <label for="volumeSlider">Volume</label>
+                <input type="range" id="volumeSlider" min="0" max="100" value="50">
+            </div>
+            <button id="backButton">Back</button>
+        </div>
+    </div>
+
+    <div id="gameContainer" class="hidden"></div>
+    <div id="controls" class="hidden">
         Управління:<br>
         - WASD: рух<br>
         - Миша: огляд<br>
         - Пробіл: стрибок<br>
+        - ЛКМ: стрільба<br>
         - ESC: розблокувати курсор
     </div>
-    <div id="crosshair">+</div>
-    <div id="score">Очки: <span id="scoreValue">0</span></div>
-    <div id="loading">Завантаження моделей...</div>
-    <script>
-        // Scene setup
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x87CEEB);
-        document.getElementById('gameContainer').appendChild(renderer.domElement);
+    <div id="crosshair" class="hidden">+</div>
+    <div id="score" class="hidden">
+        Очки: <span id="scoreValue">0</span><br>
+        М'ячі: <span id="ballsValue">∞</span>
+    </div>
+    <div id="loading" class="hidden">Завантаження моделей...</div>
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(5, 10, 5);
-        scene.add(directionalLight);
-
-        // Create ground
-        const groundGeometry = new THREE.BoxGeometry(60, 1, 60);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x3CB371,
-            roughness: 0.8,
-            metalness: 0.2
-        });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.position.y = -0.5;
-        scene.add(ground);
-
-        // Player setup
-        const PLAYER_HEIGHT = 2;
-        const PLAYER_RADIUS = 0.5;
-        const playerGeometry = new THREE.CylinderGeometry(PLAYER_RADIUS, PLAYER_RADIUS, PLAYER_HEIGHT, 8);
-        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-        const player = new THREE.Mesh(playerGeometry, playerMaterial);
-        player.position.set(0, PLAYER_HEIGHT / 2, 0);
-        scene.add(player);
-
-        // Enemy setup
-        const enemies = [];
-        let modelLoaded = false;
-
-        // Create enemy
-        function createEnemy() {
-            const loader = new THREE.FBXLoader();
-            const enemy = new THREE.Group();
-
-            // Завантажуємо модель з правильного шляху
-            loader.load(
-                './tralalelo-tralala-shark/source/Shark_Sneaker_Strut_0330050517_texture_fbx/Shark_Sneaker_Strut_0330050517_texture.fbx',
-                (fbx) => {
-                    // Завантажуємо текстуру
-                    const textureLoader = new THREE.TextureLoader();
-                    const texture = textureLoader.load(
-                        './tralalelo-tralala-shark/source/Shark_Sneaker_Strut_0330050517_texture_fbx/Shark_Sneaker_Strut_0330050517_texture.png',
-                        () => {
-                            console.log('Texture loaded successfully');
-                        }
-                    );
-
-                    // Застосовуємо текстуру до всіх матеріалів моделі
-                    fbx.traverse((child) => {
-                        if (child.isMesh) {
-                            child.material.map = texture;
-                            child.material.needsUpdate = true;
-                        }
-                    });
-
-                    fbx.scale.set(0.02, 0.02, 0.02); // Зменшуємо розмір моделі
-                    enemy.add(fbx);
-                    modelLoaded = true;
-                    console.log('FBX model loaded successfully');
-                },
-                (progress) => {
-                    console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-                },
-                (error) => {
-                    console.error('Error loading FBX:', error);
-                    // Створюємо резервну модель акули з геометричних фігур
-                    const bodyGeometry = new THREE.BoxGeometry(2, 1, 1.5);
-                    const bodyMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0x607D8B,
-                        roughness: 0.7,
-                        metalness: 0.3
-                    });
-                    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-                    enemy.add(body);
-
-                    const finGeometry = new THREE.ConeGeometry(0.5, 1, 4);
-                    const finMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0x455A64,
-                        roughness: 0.7,
-                        metalness: 0.3
-                    });
-                    const fin = new THREE.Mesh(finGeometry, finMaterial);
-                    fin.rotation.z = Math.PI;
-                    fin.position.y = 0.5;
-                    enemy.add(fin);
-
-                    const tailGeometry = new THREE.BoxGeometry(0.5, 0.8, 0.2);
-                    const tail = new THREE.Mesh(tailGeometry, finMaterial);
-                    tail.position.x = -1.2;
-                    enemy.add(tail);
-                }
-            );
-            return enemy;
-        }
-
-        // Create initial enemies
-        for (let i = 0; i < 3; i++) {
-            const enemy = createEnemy();
-            enemy.position.set(
-                Math.random() * 40 - 20,
-                1,
-                Math.random() * 40 - 20
-            );
-            scene.add(enemy);
-            enemies.push(enemy);
-        }
-
-        // First person camera setup
-        camera.position.set(0, PLAYER_HEIGHT, 0);
-        let cameraRotation = new THREE.Vector2(0, 0);
-        let isPointerLocked = false;
-
-        // Pointer lock setup
-        renderer.domElement.addEventListener('click', () => {
-            if (!isPointerLocked) {
-                renderer.domElement.requestPointerLock();
-            }
-        });
-
-        document.addEventListener('pointerlockchange', () => {
-            isPointerLocked = document.pointerLockElement === renderer.domElement;
-        });
-
-        // Mouse look (тільки горизонтальний рух без нахилів)
-        document.addEventListener('mousemove', (e) => {
-            if (isPointerLocked) {
-                cameraRotation.y -= e.movementX * 0.002;
-                cameraRotation.x = 0;
-            }
-        });
-
-        // Movement
-        const moveSpeed = 0.0085;
-        const keys = {};
-        let playerVelocity = new THREE.Vector3();
-        let isJumping = false;
-        const jumpForce = 0.15;
-        const gravity = 0.008;
-
-        // Key handling
-        window.addEventListener('keydown', function(e) {
-            if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') keys['w'] = true;
-            if (e.key.toLowerCase() === 's' || e.key === 'ArrowDown') keys['s'] = true;
-            if (e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft') keys['a'] = true;
-            if (e.key.toLowerCase() === 'd' || e.key === 'ArrowRight') keys['d'] = true;
-            if (e.key === ' ') keys['space'] = true;
-        });
-
-        window.addEventListener('keyup', function(e) {
-            if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') keys['w'] = false;
-            if (e.key.toLowerCase() === 's' || e.key === 'ArrowDown') keys['s'] = false;
-            if (e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft') keys['a'] = false;
-            if (e.key.toLowerCase() === 'd' || e.key === 'ArrowRight') keys['d'] = false;
-            if (e.key === ' ') keys['space'] = false;
-        });
-
-        function movePlayer() {
-            // Calculate movement direction
-            let moveX = 0;
-            let moveZ = 0;
-
-            // Movement using WASD/Arrows relative to camera direction
-            const forward = new THREE.Vector3(0, 0, -1);
-            const right = new THREE.Vector3(1, 0, 0);
-            
-            // Rotate vectors based on camera rotation
-            forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
-            right.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
-
-            // Apply movement based on keys
-            if (keys['w']) {
-                playerVelocity.x += forward.x * moveSpeed;
-                playerVelocity.z += forward.z * moveSpeed;
-            }
-            if (keys['s']) {
-                playerVelocity.x -= forward.x * moveSpeed;
-                playerVelocity.z -= forward.z * moveSpeed;
-            }
-            if (keys['a']) {
-                playerVelocity.x -= right.x * moveSpeed;
-                playerVelocity.z -= right.z * moveSpeed;
-            }
-            if (keys['d']) {
-                playerVelocity.x += right.x * moveSpeed;
-                playerVelocity.z += right.z * moveSpeed;
-            }
-
-            // Apply friction
-            playerVelocity.x *= 0.95;
-            playerVelocity.z *= 0.95;
-
-            // Handle jumping
-            if (keys['space'] && !isJumping) {
-                playerVelocity.y = jumpForce;
-                isJumping = true;
-            }
-
-            // Apply gravity
-            playerVelocity.y -= gravity;
-
-            // Update position
-            player.position.add(playerVelocity);
-
-            // Ground collision
-            if (player.position.y < PLAYER_HEIGHT / 2) {
-                player.position.y = PLAYER_HEIGHT / 2;
-                playerVelocity.y = 0;
-                isJumping = false;
-            }
-
-            // Platform boundaries
-            const bounds = 29;
-            player.position.x = Math.max(-bounds, Math.min(bounds, player.position.x));
-            player.position.z = Math.max(-bounds, Math.min(bounds, player.position.z));
-
-            // Update camera position
-            camera.position.copy(player.position);
-            camera.position.y = player.position.y + PLAYER_HEIGHT / 2;
-
-            // Update camera rotation (only from mouse movement)
-            camera.rotation.x = 0;
-            camera.rotation.y = cameraRotation.y;
-            camera.rotation.z = 0;
-        }
-
-        function updateEnemies() {
-            enemies.forEach((enemy, index) => {
-                const directionToPlayer = new THREE.Vector3()
-                    .subVectors(player.position, enemy.position)
-                    .normalize();
-                
-                const separationForce = new THREE.Vector3();
-                enemies.forEach((otherEnemy, otherIndex) => {
-                    if (index !== otherIndex) {
-                        const distance = enemy.position.distanceTo(otherEnemy.position);
-                        if (distance < 5) {
-                            const pushDirection = new THREE.Vector3()
-                                .subVectors(enemy.position, otherEnemy.position)
-                                .normalize()
-                                .multiplyScalar(1 - distance/5);
-                            separationForce.add(pushDirection);
-                        }
-                    }
-                });
-
-                const finalDirection = new THREE.Vector3()
-                    .addVectors(directionToPlayer, separationForce.multiplyScalar(0.5))
-                    .normalize();
-                
-                enemy.position.add(finalDirection.multiplyScalar(0.1));
-                enemy.position.y = 1;
-
-                // Поворот ворога в напрямку руху
-                if (finalDirection.length() > 0.001) {
-                    const targetRotation = Math.atan2(finalDirection.x, finalDirection.z);
-                    enemy.rotation.y = targetRotation;
-                }
-            });
-        }
-
-        function respawnEnemies() {
-            enemies.forEach(enemy => {
-                const angle = Math.random() * Math.PI * 2;
-                const distance = 15 + Math.random() * 10;
-                
-                const x = Math.sin(angle) * distance;
-                const z = Math.cos(angle) * distance;
-                
-                const bounds = 28;
-                const newX = Math.max(-bounds, Math.min(bounds, x));
-                const newZ = Math.max(-bounds, Math.min(bounds, z));
-                
-                enemy.position.set(newX, 1, newZ);
-            });
-        }
-
-        function checkCollisions() {
-            enemies.forEach(enemy => {
-                const distance = player.position.distanceTo(enemy.position);
-                if (distance < 1.5) {
-                    respawnPlayer();
-                    respawnEnemies();
-                }
-            });
-        }
-
-        function respawnPlayer() {
-            player.position.set(0, PLAYER_HEIGHT / 2, 0);
-            playerVelocity.set(0, 0, 0);
-            cameraRotation.set(0, 0);
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            movePlayer();
-            updateEnemies();
-            checkCollisions();
-            renderer.render(scene, camera);
-        }
-
-        animate();
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Hide loading message
-        document.getElementById('loading').style.display = 'none';
-    </script>
+    <script src="game.js"></script>
 </body>
 </html> 
